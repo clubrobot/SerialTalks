@@ -1,12 +1,11 @@
 #include "SerialTalks.h"
 #include "Clock.h"
-#include <EEPROM.h>
+#include "EEPROM.h"
 
 
 // Global instance
 
 SerialTalks talks;
-
 
 // Built-in instructions
 
@@ -39,7 +38,8 @@ void SerialTalks::SETEEPROM(SerialTalks& inst, Deserializer& input, Serializer& 
 {
 	int addr = input.read<int>();
 	byte value = input.read<byte>();
-	EEPROM.update(addr,value);
+	EEPROM.write(addr,value);
+	EEPROM.commit();
 }
 
 // Built-in Processing 
@@ -52,7 +52,6 @@ void SerialTalks::LAUNCHWARNING(unsigned char * message)
 	}
 	send(SERIALTALKS_WARNING_OPCODE, output);
 }
-
 
 // SerialTalks::ostream
 
@@ -73,11 +72,14 @@ size_t SerialTalks::ostream::write(const uint8_t *buffer, size_t size)
 	return m_parent->sendback(m_retcode, buffer, size + 1);
 }
 
-
 // SerialTalks
 
 void SerialTalks::begin(Stream& stream)
 {
+
+	//Initialize EEPROM
+	EEPROM.begin(EEPROM_SIZE);
+
 	// Initialize attributes
 	m_stream = &stream;
 	m_connected = false;
@@ -87,6 +89,7 @@ void SerialTalks::begin(Stream& stream)
 	// Initialize UUID stuff
 #ifdef BOARD_UUID
 	setUUID(BOARD_UUID);
+	EEPROM.commit();
 #else
 	char uuid[SERIALTALKS_UUID_LENGTH];
 	if (!getUUID(uuid) || uuid[0] == '\0')
@@ -97,13 +100,13 @@ void SerialTalks::begin(Stream& stream)
 #endif // BOARD_UUID
 
 	// Add UUID accessors
-	bind(SERIALTALKS_PING_OPCODE,     SerialTalks::PING);
-	bind(SERIALTALKS_GETUUID_OPCODE,  SerialTalks::GETUUID);
-	bind(SERIALTALKS_SETUUID_OPCODE,  SerialTalks::SETUUID);
-	bind(SERIALTALKS_GETEEPROM_OPCODE,SerialTalks::GETEEPROM);
-	bind(SERIALTALKS_SETEEPROM_OPCODE,SerialTalks::SETEEPROM);
+	bind(SERIALTALKS_PING_OPCODE,      SerialTalks::PING);
+	bind(SERIALTALKS_GETUUID_OPCODE,   SerialTalks::GETUUID);
+	bind(SERIALTALKS_SETUUID_OPCODE,   SerialTalks::SETUUID);
+	bind(SERIALTALKS_DISCONNECT_OPCODE,SerialTalks::DISCONNECT);
+	bind(SERIALTALKS_GETEEPROM_OPCODE, SerialTalks::GETEEPROM);
+	bind(SERIALTALKS_SETEEPROM_OPCODE, SerialTalks::SETEEPROM);
 }
-
 int SerialTalks::send(byte opcode,Serializer output)
 {
 	int count = 0;
@@ -161,13 +164,11 @@ void SerialTalks::bind(byte opcode, Instruction instruction)
 		m_instructions[opcode] = instruction;
 }
 
-
 void SerialTalks::attach(byte opcode, Processing processing)
 {
 	if (opcode < SERIALTALKS_MAX_PROCESSING)
 		m_processings[opcode] = processing;
 }
-
 
 bool SerialTalks::receive(byte* inputBuffer)
 {
@@ -188,6 +189,7 @@ bool SerialTalks::execinstruction(byte* inputBuffer)
 	Serializer   output(m_outputBuffer);
 	byte opcode = input.read<byte>();
 	long retcode = input.read<long>();
+
 	if (m_instructions[opcode] != 0)
 	{
 		m_instructions[opcode](*this, input, output);
@@ -289,7 +291,8 @@ bool SerialTalks::waitUntilConnected(float timeout)
 
 bool SerialTalks::getUUID(char* uuid)
 {
-	for (int i = 0; i < int(EEPROM.length()); i++)
+
+	for (int i = 0; i < EEPROM_SIZE; i++)
 	{
 		uuid[i] = EEPROM.read(SERIALTALKS_UUID_ADDRESS + i);
 		switch(byte(uuid[i]))
@@ -308,7 +311,11 @@ void SerialTalks::setUUID(const char* uuid)
 	do
 		EEPROM.write(SERIALTALKS_UUID_ADDRESS + i, uuid[i]);
 	while(uuid[i++] != '\0');
+	EEPROM.commit();
 }
+
+
+
 
 void SerialTalks::generateRandomUUID(char* uuid, int length)
 {

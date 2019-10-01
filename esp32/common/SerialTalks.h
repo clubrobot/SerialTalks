@@ -2,9 +2,15 @@
 #define __SERIALTALKS_H__
 
 #include <Arduino.h>
-#include "QueueArray.h"
 #include "serialutils.h"
 #include "CRC16.h"
+
+
+
+#ifndef EEPROM_SIZE
+#define EEPROM_SIZE 1024
+#endif
+
 
 #ifndef SERIALTALKS_BAUDRATE
 #define SERIALTALKS_BAUDRATE 115200
@@ -46,6 +52,7 @@
 #define SERIALTALKS_GETEEPROM_OPCODE  0x4
 #define SERIALTALKS_SETEEPROM_OPCODE  0x5
 #define SERIALTALKS_WARNING_OPCODE    0xFE
+
 #define SERIALTALKS_STDOUT_RETCODE 0xFFFFFFFF
 #define SERIALTALKS_STDERR_RETCODE 0xFFFFFFFE
 
@@ -80,6 +87,7 @@ public: // Public API
 
 	typedef void (*Instruction)(SerialTalks& inst, Deserializer& input, Serializer& output);
 	typedef void (*Processing)(SerialTalks& inst, Deserializer& input);
+
 
 	void begin(Stream& stream);
 
@@ -130,7 +138,7 @@ protected: // Protected methods
 		SERIALTALKS_CRC_RECIEVING_STATE,
 		SERIALTALKS_INSTRUCTION_RECEIVING_STATE,
 	}           m_state;
-
+	
 	enum// m_order
 	{
 		SERIALTALKS_ORDER,
@@ -140,6 +148,7 @@ protected: // Protected methods
 	byte        m_bytesNumber;
 	byte        m_bytesCounter;
 	long        m_lastTime;
+
 
 	// for cyclic redundancy check
 	CRC16 m_crc;
@@ -155,9 +164,10 @@ private:
 	static void PING   (SerialTalks& talks, Deserializer& input, Serializer& output);
 	static void GETUUID(SerialTalks& talks, Deserializer& input, Serializer& output);
 	static void SETUUID(SerialTalks& talks, Deserializer& input, Serializer& output);
+	static void DISCONNECT(SerialTalks& talks, Deserializer& input, Serializer& output){ESP.restart();}
 	static void GETEEPROM(SerialTalks& talks, Deserializer& input, Serializer& output);
 	static void SETEEPROM(SerialTalks& talks, Deserializer& input, Serializer& output);
-	void LAUNCHWARNING(unsigned char *  message);
+	void LAUNCHWARNING(unsigned char * message);
 };
 
 extern SerialTalks talks;
